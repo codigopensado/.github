@@ -27,7 +27,7 @@ jobs:
           USER: ${{ github.actor }}
           LABELS: ${{ toJson(github.event.issue.labels) }}
         run: |
-          if [[ ! $(echo '$LABELS' | jq -r '.[].name' | grep -x "$TARGET_LABEL") ]]; then
+          if [[ ! $(echo "$LABELS" | jq -r '.[].name' | grep -xF "$TARGET_LABEL") ]]; then
             echo "No-op: Label '$TARGET_LABEL' não encontrada."
             exit 0
           fi
