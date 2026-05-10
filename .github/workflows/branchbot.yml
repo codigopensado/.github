@@ -2,7 +2,7 @@ name: Issue Branch Bot
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened, edited, labeled]
 
 jobs:
   create-issue-branch:
