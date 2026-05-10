@@ -1,6 +1,7 @@
 name: Issue Branch Bot
 
 on:
+  workflow_call: 
   issues:
     types: [opened, edited, labeled]
 
