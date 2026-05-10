@@ -22,8 +22,10 @@ jobs:
           TARGET_LABEL: ${{ vars.TRIGGER_LABEL }}
           ALLOWED_TEAM: ${{ vars.ALLOWED_TEAM_SLUG }}
           ORG: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
           
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
           USER: ${{ github.actor }}
           LABELS: ${{ toJson(github.event.issue.labels) }}
         run: |
@@ -37,23 +39,34 @@ jobs:
             --jq '.state' 2>/dev/null || echo "not_found")
           
           if [[ "$TEAM_STATUS" != "active" ]]; then
-            echo "Erro: Usuário $USER tem status '$TEAM_STATUS' (esperado: active) no time $ALLOWED_TEAM."
+            echo "Erro: Usuário $USER tem status '$TEAM_STATUS' no time $ALLOWED_TEAM."
             exit 1
           fi
 
           BRANCH_NAME="branchbot/story/$ISSUE_NUMBER"
           
           if git ls-remote --exit-code --heads origin "$BRANCH_NAME"; then
-            echo "Erro: A branch $BRANCH_NAME já existe no repositório."
+            echo "Erro: A branch $BRANCH_NAME já existe."
             exit 1
           fi
 
-          echo "Criando branch $BRANCH_NAME a partir da branch default..."
-          
           git config --global user.name "github-actions[branchbot]"
           git config --global user.email "github-actions[branchbot]@users.noreply.github.com"
 
           git checkout -b "$BRANCH_NAME"
           git push origin "$BRANCH_NAME"
 
-          echo "Sucesso: Branch $BRANCH_NAME criada com sucesso."
+          echo "Associando branch à issue via GraphQL..."
+          
+          BRANCH_NODE_ID=$(gh api "repos/$ORG/$REPO/branches/$BRANCH_NAME" --jq '.commit.node_id')
+
+          gh api graphql -f query='
+            mutation($issueId: ID!, $branchId: ID!) {
+              createLinkedBranch(input: {issueId: $issueId, oid: $branchId}) {
+                linkedBranch {
+                  id
+                }
+              }
+            }' -f issueId="$ISSUE_NODE_ID" -f branchId="$BRANCH_NODE_ID"
+
+          echo "Sucesso: Branch $BRANCH_NAME criada e vinculada à Issue #$ISSUE_NUMBER."
