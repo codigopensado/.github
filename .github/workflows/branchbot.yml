@@ -33,10 +33,11 @@ jobs:
           fi
 
           echo "Verificando se $USER pertence ao time $ALLOWED_TEAM em $ORG..."
-          TEAM_STATUS=$(gh api /orgs/$ORG/teams/$ALLOWED_TEAM/memberships/$USER --template '{{.state}}' --silent || echo "not_found")
-
+          TEAM_STATUS=$(gh api /orgs/$ORG/teams/$ALLOWED_TEAM/memberships/$USER \
+            --jq '.state' 2>/dev/null || echo "not_found")
+          
           if [[ "$TEAM_STATUS" != "active" ]]; then
-            echo "Erro: Usuário $USER não tem permissão (não é membro ativo do time $ALLOWED_TEAM)."
+            echo "Erro: Usuário $USER tem status '$TEAM_STATUS' (esperado: active) no time $ALLOWED_TEAM."
             exit 1
           fi
 
