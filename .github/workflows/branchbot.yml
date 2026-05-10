@@ -10,13 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.ORG_READ_TOKEN }}
-          fetch-depth: 0
-
-      - name: Validate and Create Branch
+      - name: Validate and Create Linked Branch
         env:
           GH_TOKEN: ${{ secrets.ORG_READ_TOKEN }}
           TARGET_LABEL: ${{ vars.TRIGGER_LABEL }}
@@ -34,40 +28,40 @@ jobs:
             exit 0
           fi
 
-          echo "Verificando se $USER pertence ao time $ALLOWED_TEAM em $ORG..."
+          echo "Verificando se $USER pertence ao time $ALLOWED_TEAM..."
           TEAM_STATUS=$(gh api /orgs/$ORG/teams/$ALLOWED_TEAM/memberships/$USER \
             --jq '.state' 2>/dev/null || echo "not_found")
           
           if [[ "$TEAM_STATUS" != "active" ]]; then
-            echo "Erro: Usuário $USER tem status '$TEAM_STATUS' no time $ALLOWED_TEAM."
+            echo "Erro: Usuário $USER não tem permissão."
             exit 1
           fi
 
           BRANCH_NAME="branchbot/story/$ISSUE_NUMBER"
-          
-          if git ls-remote --exit-code --heads origin "$BRANCH_NAME"; then
-            echo "Erro: A branch $BRANCH_NAME já existe."
-            exit 1
-          fi
-
-          git config --global user.name "github-actions[branchbot]"
-          git config --global user.email "github-actions[branchbot]@users.noreply.github.com"
-
-          git checkout -b "$BRANCH_NAME"
-          git push origin "$BRANCH_NAME"
-
-          echo "Associando branch à issue via GraphQL..."
-          
-          BRANCH_SHA=$(gh api "repos/$ORG/$REPO/commits/$BRANCH_NAME" --jq '.sha')
           REPO_NODE_ID=$(gh api "repos/$ORG/$REPO" --jq '.node_id')
+          
+          DEFAULT_BRANCH=$(gh api "repos/$ORG/$REPO" --jq '.default_branch')
+          SHA=$(gh api "repos/$ORG/$REPO/commits/$DEFAULT_BRANCH" --jq '.sha')
+
+          echo "Criando e vinculando branch $BRANCH_NAME a partir da $DEFAULT_BRANCH ($SHA)..."
 
           gh api graphql -f query='
-            mutation($issueId: ID!, $oid: GitObjectID!, $repoId: ID!) {
-              createLinkedBranch(input: {issueId: $issueId, oid: $oid, repositoryId: $repoId}) {
+            mutation($issueId: ID!, $repoId: ID!, $name: String!, $oid: GitObjectID!) {
+              createLinkedBranch(input: {
+                issueId: $issueId, 
+                repositoryId: $repoId, 
+                name: $name, 
+                oid: $oid
+              }) {
                 linkedBranch {
-                  id
+                  ref {
+                    name
+                  }
                 }
               }
-            }' -f issueId="$ISSUE_NODE_ID" -f oid="$BRANCH_SHA" -f repoId="$REPO_NODE_ID"
+            }' -f issueId="$ISSUE_NODE_ID" \
+               -f repoId="$REPO_NODE_ID" \
+               -f name="$BRANCH_NAME" \
+               -f oid="$SHA"
 
-          echo "Sucesso: Branch $BRANCH_NAME vinculada à Issue #$ISSUE_NUMBER."
+          echo "Sucesso: Branch $BRANCH_NAME criada e vinculada com sucesso."
