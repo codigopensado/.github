@@ -58,15 +58,15 @@ jobs:
 
           echo "Associando branch à issue via GraphQL..."
           
-          BRANCH_NODE_ID=$(gh api "repos/$ORG/$REPO/branches/$BRANCH_NAME" --jq '.commit.node_id')
+          BRANCH_SHA=$(gh api "repos/$ORG/$REPO/commits/$BRANCH_NAME" --jq '.sha')
 
           gh api graphql -f query='
-            mutation($issueId: ID!, $branchId: ID!) {
-              createLinkedBranch(input: {issueId: $issueId, oid: $branchId}) {
+            mutation($issueId: ID!, $oid: GitObjectID!) {
+              createLinkedBranch(input: {issueId: $issueId, oid: $oid}) {
                 linkedBranch {
                   id
                 }
               }
-            }' -f issueId="$ISSUE_NODE_ID" -f branchId="$BRANCH_NODE_ID"
+            }' -f issueId="$ISSUE_NODE_ID" -f oid="$BRANCH_SHA"
 
           echo "Sucesso: Branch $BRANCH_NAME criada e vinculada à Issue #$ISSUE_NUMBER."
