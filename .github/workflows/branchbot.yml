@@ -1,0 +1,59 @@
+name: Issue Branch Bot
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  create-issue-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ORG_READ_TOKEN }}
+          fetch-depth: 0
+
+      - name: Validate and Create Branch
+        env:
+          GH_TOKEN: ${{ secrets.ORG_READ_TOKEN }}
+          TARGET_LABEL: ${{ vars.TRIGGER_LABEL }}
+          ALLOWED_TEAM: ${{ vars.ALLOWED_TEAM_SLUG }}
+          ORG: ${{ github.repository_owner }}
+          
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          USER: ${{ github.actor }}
+          LABELS: ${{ toJson(github.event.issue.labels) }}
+        run: |
+          if [[ ! $(echo '$LABELS' | jq -r '.[].name' | grep -x "$TARGET_LABEL") ]]; then
+            echo "No-op: Label '$TARGET_LABEL' não encontrada."
+            exit 0
+          fi
+
+          echo "Verificando se $USER pertence ao time $ALLOWED_TEAM em $ORG..."
+          TEAM_STATUS=$(gh api /orgs/$ORG/teams/$ALLOWED_TEAM/memberships/$USER --template '{{.state}}' --silent || echo "not_found")
+
+          if [[ "$TEAM_STATUS" != "active" ]]; then
+            echo "Erro: Usuário $USER não tem permissão (não é membro ativo do time $ALLOWED_TEAM)."
+            exit 1
+          fi
+
+          BRANCH_NAME="branchbot/story/$ISSUE_NUMBER"
+          
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME"; then
+            echo "Erro: A branch $BRANCH_NAME já existe no repositório."
+            exit 1
+          fi
+
+          echo "Criando branch $BRANCH_NAME a partir da branch default..."
+          
+          git config --global user.name "github-actions[branchbot]"
+          git config --global user.email "github-actions[branchbot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH_NAME"
+          git push origin "$BRANCH_NAME"
+
+          echo "Sucesso: Branch $BRANCH_NAME criada com sucesso."
